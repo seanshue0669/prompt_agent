@@ -1,0 +1,3 @@
+[submodule "agentcore"]
+	path = agentcore
+	url = https://github.com/seanshue0669/agentcore.git
