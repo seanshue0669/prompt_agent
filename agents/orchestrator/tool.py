@@ -49,7 +49,7 @@ class OrchestratorTool(BaseTool):
         stage_name = self.stage_names[stage_idx - 1]
         
         # Validate agent_type
-        valid_types = ["diagnostic", "questioning", "integration"]
+        valid_types = ["diagnostic", "questioning_followup", "questioning_compress", "integration"]
         if agent_type not in valid_types:
             raise Exception(
                 f"Invalid agent_type '{agent_type}'. Must be one of: {valid_types}"

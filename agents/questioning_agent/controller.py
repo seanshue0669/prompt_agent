@@ -10,8 +10,8 @@ class QuestioningAgent(BaseGraph):
     Agent for asking questions to users and collecting answers.
     
     This agent presents questions from the diagnostic phase,
-    collects user answers via CLI, and handles followup questions
-    when answers need clarification.
+    collects user answers via CLI, handles followup questions,
+    and compresses the entire conversation into a concise Q&A.
     """
 
     def __init__(self, llm_client: LLMClient):
@@ -34,9 +34,12 @@ class QuestioningAgent(BaseGraph):
     
     def ask_question(self, state: dict) -> dict:
         """
-        Ask the current question and collect user's answer.
-        May generate and ask followup questions based on answer quality.
-        Compresses entire conversation at the end.
+        Ask the current question and handle the entire conversation flow.
+        
+        This method delegates all logic to the tool, which handles:
+        - Asking the original question
+        - Managing followup conversation
+        - Compressing the entire conversation
         
         Args:
             state: QuestioningAgentState containing:
@@ -45,7 +48,7 @@ class QuestioningAgent(BaseGraph):
                 - question_list: All questions for this stage
                 - dialogue_idx: Current question index
                 - answer_list: Existing answers
-                - followup_count: Current followup count
+                - followup_count: Current followup count (not used anymore, kept for compatibility)
                 
         Returns:
             Updated state with compressed answer appended to answer_list
@@ -55,7 +58,6 @@ class QuestioningAgent(BaseGraph):
         question_list = state["question_list"]
         dialogue_idx = state["dialogue_idx"]
         answer_list = state["answer_list"]
-        followup_count = state["followup_count"]
         
         # Get current question
         if dialogue_idx >= len(question_list):
@@ -63,75 +65,28 @@ class QuestioningAgent(BaseGraph):
         
         current_question = question_list[dialogue_idx]
         
-        # Determine stage_idx for CLI display
-        stage_idx = 1  # Will be properly set when called from Orchestrator
+        # Determine stage_idx for CLI display (extract from orchestrator state if available)
+        # For now, use a placeholder - will be properly set when called from Orchestrator
+        stage_idx = state.get("stage_idx", 1)
         
-        # Track entire conversation
-        conversation_history = []
-        
-        # Ask original question
-        answer = self.tool.ask_question_and_collect(
-            system_prompt=system_prompt_followup,
+        # Delegate entire conversation handling to tool
+        compressed = self.tool.handle_question_conversation(
+            system_prompt_followup=system_prompt_followup,
+            system_prompt_compress=system_prompt_compress,
             question=current_question,
             stage_idx=stage_idx,
             question_idx=dialogue_idx + 1,
-            total_questions=len(question_list)
+            total_questions=len(question_list),
+            max_followup=self.max_followup_count
         )
         
-        conversation_history.append({
-            "question": current_question,
-            "answer": answer
-        })
-        
-        # Followup loop
-        current_followup_count = followup_count
-        
-        while current_followup_count < self.max_followup_count:
-            # Check if followup needed
-            followup_result = self.tool.should_followup(
-                system_prompt=system_prompt_followup,
-                question=current_question,
-                answer=answer,
-                followup_count=current_followup_count,
-                max_followup=self.max_followup_count
-            )
-            
-            if not followup_result["need_followup"]:
-                break
-            
-            # Generate and ask followup
-            followup_question = followup_result["followup_question"]
-            current_followup_count += 1
-            
-            followup_answer = self.tool.ask_question_and_collect(
-                system_prompt=system_prompt_followup,
-                question=followup_question,
-                stage_idx=stage_idx,
-                question_idx=dialogue_idx + 1,
-                total_questions=len(question_list)
-            )
-            
-            conversation_history.append({
-                "question": followup_question,
-                "answer": followup_answer
-            })
-            
-            # Update answer for next iteration check
-            answer = followup_answer
-        
-        # Compress entire conversation
-        compressed = self.tool.compress_conversation(
-            system_prompt=system_prompt_compress,
-            original_question=current_question,
-            conversation_history=conversation_history
-        )
-        
-        # Append compressed result
+        # Append compressed result to answer_list
         answer_list.append(compressed)
         
         # Update state
         state["answer_list"] = answer_list
-        state["followup_count"] = current_followup_count
+        # Reset followup_count (not really used anymore, but keep for state consistency)
+        state["followup_count"] = 0
         
         return state
     

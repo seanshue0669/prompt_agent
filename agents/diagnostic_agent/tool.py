@@ -36,7 +36,24 @@ class DiagnosticAgentTool(BaseTool):
         
         # Configure for JSON output
         config_override = {
-            "response_format": {"type": "json_object"}
+                    "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "test_response",
+                    "strict": True,
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "questions": {
+                                "type": "array",
+                                "items": {"type": "string"}
+                            }
+                        },
+                        "required": ["questions"],
+                        "additionalProperties": False
+                    }
+                }
+            }
         }
         
         # Call LLM

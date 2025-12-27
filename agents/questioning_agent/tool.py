@@ -1,14 +1,19 @@
 # agents/questioning_agent/tool.py
 import json
-from typing import List
+from typing import List, Dict
 from agentcore import LLMClient, BaseTool, auto_wrap_error
 from config.runtime_config import RuntimeConfig
 
 
 class QuestioningAgentTool(BaseTool):
     """
-    Tool for asking questions to users and collecting answers.
-    Handles CLI interaction and followup question generation.
+    Tool for managing question-answer conversations with users.
+    
+    Handles the complete conversation flow including:
+    - Asking questions via CLI
+    - Determining when followup is needed
+    - Generating followup questions
+    - Compressing conversation history
     """
     
     def __init__(self, client: LLMClient):
@@ -16,9 +21,99 @@ class QuestioningAgentTool(BaseTool):
         self.client = client
     
     @auto_wrap_error
-    def ask_question_and_collect(
+    def handle_question_conversation(
         self,
-        system_prompt: str,
+        system_prompt_followup: str,
+        system_prompt_compress: str,
+        question: str,
+        stage_idx: int,
+        question_idx: int,
+        total_questions: int,
+        max_followup: int
+    ) -> str:
+        """
+        Handle the entire conversation for a single question.
+        
+        This method:
+        1. Asks the original question
+        2. Manages followup conversation loop
+        3. Compresses the entire conversation
+        4. Returns the compressed Q&A result
+        
+        Args:
+            system_prompt_followup: System prompt for followup decision/generation
+            system_prompt_compress: System prompt for conversation compression
+            question: The question to ask
+            stage_idx: Current stage number (for CLI display)
+            question_idx: Current question number (for CLI display)
+            total_questions: Total number of questions (for CLI display)
+            max_followup: Maximum number of followup questions allowed
+            
+        Returns:
+            Compressed Q&A string in format "Q: ... A: ..."
+        """
+        # Track entire conversation
+        conversation_history = []
+        
+        # Ask original question
+        answer = self._ask_question_via_cli(
+            question=question,
+            stage_idx=stage_idx,
+            question_idx=question_idx,
+            total_questions=total_questions
+        )
+        
+        conversation_history.append({
+            "question": question,
+            "answer": answer
+        })
+        
+        # Followup loop
+        followup_count = 0
+        current_answer = answer
+        
+        while followup_count < max_followup:
+            # Ask LLM if followup is needed
+            followup_result = self._check_followup_needed(
+                system_prompt=system_prompt_followup,
+                original_question=question,
+                current_answer=current_answer,
+                followup_count=followup_count,
+                max_followup=max_followup
+            )
+            
+            if not followup_result["need_followup"]:
+                break
+            
+            # Generate and ask followup question
+            followup_question = followup_result["followup_question"]
+            followup_answer = self._ask_question_via_cli(
+                question=followup_question,
+                stage_idx=stage_idx,
+                question_idx=question_idx,
+                total_questions=total_questions
+            )
+            
+            conversation_history.append({
+                "question": followup_question,
+                "answer": followup_answer
+            })
+            
+            followup_count += 1
+            current_answer = followup_answer
+        
+        # Compress entire conversation
+        compressed = self._compress_conversation(
+            system_prompt=system_prompt_compress,
+            original_question=question,
+            conversation_history=conversation_history
+        )
+        
+        return compressed
+    
+    @auto_wrap_error
+    def _ask_question_via_cli(
+        self,
         question: str,
         stage_idx: int,
         question_idx: int,
@@ -28,7 +123,6 @@ class QuestioningAgentTool(BaseTool):
         Ask a question to the user via CLI and collect the answer.
         
         Args:
-            system_prompt: System prompt for question formatting
             question: The question to ask
             stage_idx: Current stage number (for CLI display)
             question_idx: Current question number (for CLI display)
@@ -50,32 +144,28 @@ class QuestioningAgentTool(BaseTool):
             total_questions=total_questions
         )
         
-        # Format the question using LLM (optional enhancement)
-        # For now, use the question directly
-        formatted_question = question
-        
         # Get user input via CLI
-        answer = cli.get_user_input(formatted_question)
+        answer = cli.get_user_input(question)
         
         return answer
     
     @auto_wrap_error
-    def should_followup(
+    def _check_followup_needed(
         self,
         system_prompt: str,
-        question: str,
-        answer: str,
+        original_question: str,
+        current_answer: str,
         followup_count: int,
         max_followup: int
-    ) -> dict:
+    ) -> Dict[str, any]:
         """
-        Determine if a followup question is needed based on answer quality.
+        Use LLM to determine if a followup question is needed.
         
         Args:
             system_prompt: System prompt for followup criteria
-            question: Original question
-            answer: User's answer
-            followup_count: Current followup count for this question
+            original_question: The original question asked
+            current_answer: User's current answer
+            followup_count: Current followup count
             max_followup: Maximum allowed followup count
             
         Returns:
@@ -91,9 +181,12 @@ class QuestioningAgentTool(BaseTool):
             }
         
         # Construct user prompt for LLM to decide
-        user_prompt = f"""Original question: {question}
+        user_prompt = f"""Original question: {original_question}
 
-User's answer: {answer}
+User's answer: {current_answer}
+
+Current followup count: {followup_count}
+Maximum followup allowed: {max_followup}
 
 Based on the followup criteria in the system prompt, determine if this answer is clear enough or if a followup question is needed."""
         
@@ -150,76 +243,75 @@ Based on the followup criteria in the system prompt, determine if this answer is
                 "need_followup": False,
                 "followup_question": None
             }
-    # Add new method for compression
-@auto_wrap_error
-def compress_conversation(
-    self,
-    system_prompt: str,
-    original_question: str,
-    conversation_history: List[dict]
-) -> str:
-    """
-    Compress entire conversation into a concise Q&A pair.
     
-    Args:
-        system_prompt: System prompt for compression (with CoT)
-        original_question: The original question asked
-        conversation_history: List of {"question": str, "answer": str} dicts
+    @auto_wrap_error
+    def _compress_conversation(
+        self,
+        system_prompt: str,
+        original_question: str,
+        conversation_history: List[Dict[str, str]]
+    ) -> str:
+        """
+        Compress entire conversation into a concise Q&A pair using LLM.
         
-    Returns:
-        Compressed Q&A string like "Q: ... A: ..."
+        Args:
+            system_prompt: System prompt for compression (with CoT)
+            original_question: The original question asked
+            conversation_history: List of {"question": str, "answer": str} dicts
+            
+        Returns:
+            Compressed Q&A string like "Q: ... A: ..."
+            
+        Raises:
+            Exception: If LLM call fails or returns invalid JSON
+        """
+        # Format conversation history
+        formatted_history = ""
+        for i, turn in enumerate(conversation_history, 1):
+            formatted_history += f"{i}. Q: {turn['question']}\n"
+            formatted_history += f"   A: {turn['answer']}\n\n"
         
-    Raises:
-        Exception: If LLM call fails or returns invalid JSON
-    """
-    # Format conversation history
-    formatted_history = ""
-    for i, turn in enumerate(conversation_history, 1):
-        formatted_history += f"{i}. Q: {turn['question']}\n"
-        formatted_history += f"   A: {turn['answer']}\n\n"
-    
-    # Construct user prompt
-    user_prompt = f"""Original question: {original_question}
+        # Construct user prompt
+        user_prompt = f"""Original question: {original_question}
 
 Conversation history:
 {formatted_history}
 
 Based on the entire conversation, compress this into a single concise Q&A pair."""
-    
-    # Configure for JSON output with CoT
-    config_override = {
-        "response_format": {"type": "json_object"},
-        "max_completion_tokens": 1000  # More tokens for CoT
-    }
-    
-    # Call LLM
-    response = self.client.invoke(
-        user_prompt=user_prompt,
-        system_prompt=system_prompt,
-        config_override=config_override
-    )
-    
-    # Parse JSON response
-    raw = (response.get("content") or "").strip()
-    if not raw:
-        raise Exception("LLM returned empty content")
-    
-    try:
-        result = json.loads(raw)
-    except json.JSONDecodeError as e:
-        raise Exception(f"Failed to parse LLM response as JSON: {e}")
-    
-    # Extract compressed Q&A
-    # Expected format: {"compressed": "Q: ... A: ..."}
-    if "compressed" not in result:
-        raise Exception("LLM response missing 'compressed' field")
-    
-    compressed = result["compressed"]
-    
-    if not isinstance(compressed, str):
-        raise Exception("'compressed' field must be a string")
-    
-    if not compressed.strip():
-        raise Exception("LLM generated empty compressed Q&A")
-    
-    return compressed
+        
+        # Configure for JSON output with CoT
+        config_override = {
+            "response_format": {"type": "json_object"},
+            "max_completion_tokens": 1000  # More tokens for CoT
+        }
+        
+        # Call LLM
+        response = self.client.invoke(
+            user_prompt=user_prompt,
+            system_prompt=system_prompt,
+            config_override=config_override
+        )
+        
+        # Parse JSON response
+        raw = (response.get("content") or "").strip()
+        if not raw:
+            raise Exception("LLM returned empty content")
+        
+        try:
+            result = json.loads(raw)
+        except json.JSONDecodeError as e:
+            raise Exception(f"Failed to parse LLM response as JSON: {e}")
+        
+        # Expected format: {"思考過程": {...}, "compressed": "Q: ... A: ..."}
+        if "compressed" not in result:
+            raise Exception("LLM response missing 'compressed' field")
+        
+        compressed = result["compressed"]
+        
+        if not isinstance(compressed, str):
+            raise Exception("'compressed' field must be a string")
+        
+        if not compressed.strip():
+            raise Exception("LLM generated empty compressed Q&A")
+        
+        return compressed
