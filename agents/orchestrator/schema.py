@@ -1,6 +1,7 @@
 # agents/orchestrator/schema.py
 from typing import TypedDict, List
-from agentcore import BaseSchema 
+from agentcore import BaseSchema
+from langgraph.graph import END
 
 # ========================================================
 # State definition
@@ -52,6 +53,12 @@ def call_questioning(state: OrchestratorState) -> dict:
     """
     return state
 
+def increment_dialogue_idx(state: OrchestratorState) -> dict:
+    """
+    Increment dialogue_idx after asking a question.
+    """
+    return state
+
 def call_integration(state: OrchestratorState) -> dict:
     """
     Call IntegrationAgent subgraph to integrate answers into prompt.
@@ -69,23 +76,30 @@ def update_stage(state: OrchestratorState) -> dict:
 # ========================================================
 def route_after_questioning(state: OrchestratorState) -> str:
     """
-    Route after QuestioningAgent based on dialogue progress.
+    Route after incrementing dialogue_idx.
     
     Returns:
         "call_questioning": If more questions remain
         "call_integration": If all questions answered
     """
-    return "call_integration"
+    dialogue_idx = state["dialogue_idx"]
+    question_list = state["question_list"]
+    
+    if dialogue_idx < len(question_list):
+        return "call_questioning"
+    else:
+        return "call_integration"
 
 def route_after_integration(state: OrchestratorState) -> str:
     """
     Route after IntegrationAgent based on stage progress.
     
     Returns:
-        "init_stage": If more stages remain (stage_idx < 6)
-        "end": If all 6 stages completed
+        "init_stage": If more stages remain
+        END: If all stages completed
     """
-    return "end"
+    # This will be implemented in controller with actual stage count check
+    return END
 
 # ========================================================
 # Schema Definition
@@ -100,23 +114,25 @@ class OrchestratorSchema(BaseSchema):
         ("init_stage", init_stage),
         ("call_diagnostic", call_diagnostic),
         ("call_questioning", call_questioning),
+        ("increment_dialogue_idx", increment_dialogue_idx),
         ("call_integration", call_integration),
         ("update_stage", update_stage)
     ]
     
     conditional_edges = [
-        ("call_questioning", route_after_questioning, {
+        ("increment_dialogue_idx", route_after_questioning, {
             "call_questioning": "call_questioning",
             "call_integration": "call_integration"
         }),
         ("update_stage", route_after_integration, {
             "init_stage": "init_stage",
-            "end": "end"
+            END: END
         })
     ]
     
     direct_edges = [
         ("init_stage", "call_diagnostic"),
         ("call_diagnostic", "call_questioning"),
+        ("call_questioning", "increment_dialogue_idx"),
         ("call_integration", "update_stage")
     ]
