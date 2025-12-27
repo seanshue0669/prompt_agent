@@ -1,0 +1,5 @@
+{
+  "test_prompt": "幫我學習 Python 程式設計",
+  "cot_enabled": false,
+  "cot_level": "medium"
+}
