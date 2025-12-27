@@ -1,11 +1,13 @@
-# agents/diagnostic_agent/tool.py
+# agents/questioning_agent/tool.py
 import json
 from agentcore import LLMClient, BaseTool, auto_wrap_error
+from config.runtime_config import RuntimeConfig
 
 
-class DiagnosticAgentTool(BaseTool):
+class QuestioningAgentTool(BaseTool):
     """
-    Tool for analyzing prompts and generating diagnostic questions.
+    Tool for asking questions to users and collecting answers.
+    Handles CLI interaction and followup question generation.
     """
     
     def __init__(self, client: LLMClient):
@@ -13,26 +15,86 @@ class DiagnosticAgentTool(BaseTool):
         self.client = client
     
     @auto_wrap_error
-    def diagnose_prompt(self, system_prompt: str, current_prompt: str) -> list[str]:
+    def ask_question_and_collect(
+        self,
+        system_prompt: str,
+        question: str,
+        stage_idx: int,
+        question_idx: int,
+        total_questions: int
+    ) -> str:
         """
-        Analyze the current prompt and generate diagnostic questions.
+        Ask a question to the user via CLI and collect the answer.
         
         Args:
-            system_prompt: System prompt defining the diagnostic criteria
-            current_prompt: The prompt to be analyzed
+            system_prompt: System prompt for question formatting
+            question: The question to ask
+            stage_idx: Current stage number (for CLI display)
+            question_idx: Current question number (for CLI display)
+            total_questions: Total number of questions (for CLI display)
             
         Returns:
-            List of diagnostic questions
-            
-        Raises:
-            Exception: If LLM call fails or returns invalid JSON
+            User's answer as string
         """
-        # Construct user prompt with the current prompt to analyze
-        user_prompt = f"""Please analyze the following prompt:
-        ```
-        {current_prompt}
-        ```
-        Based on the diagnostic criteria in the system prompt, generate questions to ask the user."""
+        # Get CLI interface from RuntimeConfig
+        cli = RuntimeConfig.cli_interface
+        if cli is None:
+            raise Exception("CLI interface not initialized in RuntimeConfig")
+        
+        # Update CLI stage display
+        cli.update_stage(
+            stage_idx=stage_idx,
+            substage="對話",
+            question_idx=question_idx,
+            total_questions=total_questions
+        )
+        
+        # Format the question using LLM (optional enhancement)
+        # For now, use the question directly
+        formatted_question = question
+        
+        # Get user input via CLI
+        answer = cli.get_user_input(formatted_question)
+        
+        return answer
+    
+    @auto_wrap_error
+    def should_followup(
+        self,
+        system_prompt: str,
+        question: str,
+        answer: str,
+        followup_count: int,
+        max_followup: int
+    ) -> dict:
+        """
+        Determine if a followup question is needed based on answer quality.
+        
+        Args:
+            system_prompt: System prompt for followup criteria
+            question: Original question
+            answer: User's answer
+            followup_count: Current followup count for this question
+            max_followup: Maximum allowed followup count
+            
+        Returns:
+            Dict with:
+                - need_followup: bool (whether followup is needed)
+                - followup_question: str or None (the followup question if needed)
+        """
+        # If already at max followup, no more followups
+        if followup_count >= max_followup:
+            return {
+                "need_followup": False,
+                "followup_question": None
+            }
+        
+        # Construct user prompt for LLM to decide
+        user_prompt = f"""Original question: {question}
+
+User's answer: {answer}
+
+Based on the followup criteria in the system prompt, determine if this answer is clear enough or if a followup question is needed."""
         
         # Configure for JSON output
         config_override = {
@@ -56,17 +118,34 @@ class DiagnosticAgentTool(BaseTool):
         except json.JSONDecodeError as e:
             raise Exception(f"Failed to parse LLM response as JSON: {e}")
         
-        # Extract question list
-        # Expected format: {"questions": ["question1", "question2", ...]}
-        if "questions" not in result:
-            raise Exception("LLM response missing 'questions' field")
+        # Expected format: {"need_followup": true/false, "followup_question": "..."}
+        if "need_followup" not in result:
+            raise Exception("LLM response missing 'need_followup' field")
         
-        questions = result["questions"]
+        need_followup = result["need_followup"]
         
-        if not isinstance(questions, list):
-            raise Exception("'questions' field must be a list")
+        if not isinstance(need_followup, bool):
+            raise Exception("'need_followup' field must be a boolean")
         
-        if len(questions) == 0:
-            raise Exception("LLM generated empty question list")
-        
-        return questions
+        # If followup needed, extract the question
+        if need_followup:
+            if "followup_question" not in result:
+                raise Exception("LLM indicated followup needed but missing 'followup_question' field")
+            
+            followup_question = result["followup_question"]
+            
+            if not isinstance(followup_question, str):
+                raise Exception("'followup_question' field must be a string")
+            
+            if not followup_question.strip():
+                raise Exception("LLM generated empty followup question")
+            
+            return {
+                "need_followup": True,
+                "followup_question": followup_question
+            }
+        else:
+            return {
+                "need_followup": False,
+                "followup_question": None
+            }

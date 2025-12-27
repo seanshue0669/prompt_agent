@@ -1,11 +1,11 @@
-# agents/diagnostic_agent/__init__.py
-from .controller import DiagnosticAgent
-from .schema import DiagnosticAgentState, DiagnosticAgentSchema
-from .tool import DiagnosticAgentTool
+# agents/questioning_agent/__init__.py
+from .controller import QuestioningAgent
+from .schema import QuestioningAgentState, QuestioningAgentSchema
+from .tool import QuestioningAgentTool
 
 __all__ = [
-    "DiagnosticAgent",
-    "DiagnosticAgentState",
-    "DiagnosticAgentSchema",
-    "DiagnosticAgentTool",
+    "QuestioningAgent",
+    "QuestioningAgentState",
+    "QuestioningAgentSchema",
+    "QuestioningAgentTool",
 ]
