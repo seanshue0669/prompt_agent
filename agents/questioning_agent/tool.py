@@ -12,7 +12,7 @@ class QuestioningAgentTool(BaseTool):
     Handles the complete conversation flow including:
     - Asking questions via CLI
     - Determining when followup is needed
-    - Generating followup questions
+    - Generating followup questions (with options if needed)
     - Compressing conversation history
     """
     
@@ -55,12 +55,13 @@ class QuestioningAgentTool(BaseTool):
         # Track entire conversation
         conversation_history = []
         
-        # Ask original question
+        # Ask original question (open-ended, no options)
         answer = self._ask_question_via_cli(
             question=question,
             stage_idx=stage_idx,
             question_idx=question_idx,
-            total_questions=total_questions
+            total_questions=total_questions,
+            options=None  # First question has no options
         )
         
         conversation_history.append({
@@ -85,18 +86,22 @@ class QuestioningAgentTool(BaseTool):
             if not followup_result["need_followup"]:
                 break
             
-            # Generate and ask followup question
+            # Generate and ask followup question (with options)
             followup_question = followup_result["followup_question"]
+            followup_options = followup_result.get("options", None)  # May have options
+            
             followup_answer = self._ask_question_via_cli(
                 question=followup_question,
                 stage_idx=stage_idx,
                 question_idx=question_idx,
-                total_questions=total_questions
+                total_questions=total_questions,
+                options=followup_options  # Pass options to CLI
             )
             
             conversation_history.append({
                 "question": followup_question,
-                "answer": followup_answer
+                "answer": followup_answer,
+                "has_options": followup_options is not None
             })
             
             followup_count += 1
@@ -117,7 +122,8 @@ class QuestioningAgentTool(BaseTool):
         question: str,
         stage_idx: int,
         question_idx: int,
-        total_questions: int
+        total_questions: int,
+        options: List[str] = None
     ) -> str:
         """
         Ask a question to the user via CLI and collect the answer.
@@ -127,6 +133,7 @@ class QuestioningAgentTool(BaseTool):
             stage_idx: Current stage number (for CLI display)
             question_idx: Current question number (for CLI display)
             total_questions: Total number of questions (for CLI display)
+            options: Optional list of options to display (e.g., ["A) ...", "B) ...", ...])
             
         Returns:
             User's answer as string
@@ -144,8 +151,8 @@ class QuestioningAgentTool(BaseTool):
             total_questions=total_questions
         )
         
-        # Get user input via CLI
-        answer = cli.get_user_input(question)
+        # Get user input via CLI (with options if provided)
+        answer = cli.get_user_input(question, options=options)
         
         return answer
     
@@ -172,12 +179,14 @@ class QuestioningAgentTool(BaseTool):
             Dict with:
                 - need_followup: bool (whether followup is needed)
                 - followup_question: str or None (the followup question if needed)
+                - options: List[str] or None (list of options if this is a multiple choice followup)
         """
         # If already at max followup, no more followups
         if followup_count >= max_followup:
             return {
                 "need_followup": False,
-                "followup_question": None
+                "followup_question": None,
+                "options": None
             }
         
         # Construct user prompt for LLM to decide
@@ -190,9 +199,35 @@ Maximum followup allowed: {max_followup}
 
 Based on the followup criteria in the system prompt, determine if this answer is clear enough or if a followup question is needed."""
         
-        # Configure for JSON output
+        # Configure for JSON output with strict schema
         config_override = {
-            "response_format": {"type": "json_object"}
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "followup_response",
+                    "strict": True,
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "need_followup": {
+                                "type": "boolean",
+                                "description": "Whether a followup question is needed"
+                            },
+                            "followup_question": {
+                                "type": "string",
+                                "description": "The followup question text (required if need_followup is true)"
+                            },
+                            "options": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "List of options for multiple choice (required if need_followup is true)"
+                            }
+                        },
+                        "required": ["need_followup"],
+                        "additionalProperties": False
+                    }
+                }
+            }
         }
         
         # Call LLM
@@ -212,7 +247,7 @@ Based on the followup criteria in the system prompt, determine if this answer is
         except json.JSONDecodeError as e:
             raise Exception(f"Failed to parse LLM response as JSON: {e}")
         
-        # Expected format: {"need_followup": true/false, "followup_question": "..."}
+        # Validate response structure
         if "need_followup" not in result:
             raise Exception("LLM response missing 'need_followup' field")
         
@@ -221,12 +256,16 @@ Based on the followup criteria in the system prompt, determine if this answer is
         if not isinstance(need_followup, bool):
             raise Exception("'need_followup' field must be a boolean")
         
-        # If followup needed, extract the question
+        # If followup needed, extract the question and options
         if need_followup:
             if "followup_question" not in result:
                 raise Exception("LLM indicated followup needed but missing 'followup_question' field")
             
+            if "options" not in result:
+                raise Exception("LLM indicated followup needed but missing 'options' field")
+            
             followup_question = result["followup_question"]
+            options = result["options"]
             
             if not isinstance(followup_question, str):
                 raise Exception("'followup_question' field must be a string")
@@ -234,14 +273,27 @@ Based on the followup criteria in the system prompt, determine if this answer is
             if not followup_question.strip():
                 raise Exception("LLM generated empty followup question")
             
+            if not isinstance(options, list):
+                raise Exception("'options' field must be a list")
+            
+            if len(options) == 0:
+                raise Exception("LLM generated empty options list")
+            
+            # Validate all options are strings
+            for i, opt in enumerate(options):
+                if not isinstance(opt, str):
+                    raise Exception(f"Option {i} must be a string")
+            
             return {
                 "need_followup": True,
-                "followup_question": followup_question
+                "followup_question": followup_question,
+                "options": options
             }
         else:
             return {
                 "need_followup": False,
-                "followup_question": None
+                "followup_question": None,
+                "options": None
             }
     
     @auto_wrap_error
@@ -257,7 +309,7 @@ Based on the followup criteria in the system prompt, determine if this answer is
         Args:
             system_prompt: System prompt for compression (with CoT)
             original_question: The original question asked
-            conversation_history: List of {"question": str, "answer": str} dicts
+            conversation_history: List of {"question": str, "answer": str, "has_options": bool} dicts
             
         Returns:
             Compressed Q&A string like "Q: ... A: ..."

@@ -124,22 +124,38 @@ class CLIInterface:
         # Refresh display
         self._refresh_display()
     
-    def get_user_input(self, prompt: Optional[str] = None) -> str:
+    def get_user_input(self, prompt: Optional[str] = None, options: Optional[List[str]] = None) -> str:
         """
-        Get multi-line user input.
+        Get multi-line user input, optionally with multiple choice options.
         
         Args:
             prompt: Optional system prompt/question to display first
+            options: Optional list of options (e.g., ["A) ...", "B) ...", "C) 其他", "D) 沒有想法"])
             
         Returns:
             User's input as a single string (multi-line preserved)
         """
-        # If there's a prompt, show it as a system message
+        # Build the full prompt message
+        full_message = ""
+        
         if prompt:
-            self.show_message("system", prompt)
+            full_message = prompt
+        
+        # If options provided, format them nicely
+        if options:
+            full_message += "\n\n"
+            for option in options:
+                full_message += f"{option}\n"
+        
+        # Show the prompt as a system message
+        if full_message:
+            self.show_message("system", full_message.strip())
         
         # Display input instructions
-        print("請輸入你的回答（空行結束）:")
+        if options:
+            print("請輸入你的選擇（或自由回答，空行結束）:")
+        else:
+            print("請輸入你的回答（空行結束）:")
         
         # Collect multi-line input
         lines = []
@@ -173,14 +189,19 @@ if __name__ == "__main__":
     # Simulate stage 1, diagnosis
     cli.update_stage(stage_idx=1, substage="診斷")
     
-    # Simulate stage 1, question phase
+    # Simulate stage 1, question phase - open-ended question
     cli.update_stage(stage_idx=1, substage="對話", question_idx=1, total_questions=3)
-    
-    # Get user input
     answer1 = cli.get_user_input("你希望老師是什麼風格？")
     
-    # Simulate follow-up question
-    answer2 = cli.get_user_input("能具體說明「輕鬆有趣」是什麼意思嗎？")
+    # Simulate follow-up with options
+    options = [
+        "A) 逐步講解，從基礎開始",
+        "B) 實作導向，透過專案學習",
+        "C) 理論與實作並重",
+        "D) 其他",
+        "E) 沒有想法"
+    ]
+    answer2 = cli.get_user_input("請選擇你偏好的教學方式：", options=options)
     
     # Move to next question (clear conversation)
     cli.clear_conversation()
