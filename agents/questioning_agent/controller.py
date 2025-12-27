@@ -1,35 +1,52 @@
-# agents/questioning_agent/controller.py
-import json
-
+# agents/diagnostic_agent/controller.py
 from agentcore import LLMClient, BaseGraph
+from agents.diagnostic_agent.schema import DiagnosticAgentSchema
+from agents.diagnostic_agent.tool import DiagnosticAgentTool
 
-from agents.questioning_agent.schema import QuestioningAgentSchema
-from agents.questioning_agent.tool import QuestioningAgentTool
 
-
-class QuestioningAgent(BaseGraph):
-    """Agent for questioning agent."""
+class DiagnosticAgent(BaseGraph):
+    """
+    Agent for analyzing prompts and generating diagnostic questions.
+    
+    This agent receives a prompt and diagnostic criteria (via system_prompt),
+    analyzes the prompt, and generates a list of questions to ask the user.
+    """
 
     def __init__(self, llm_client: LLMClient):
-        super().__init__(QuestioningAgentSchema.state_type)
+        super().__init__(DiagnosticAgentSchema.state_type)
 
-        # --- import schema definitions ---
-        self.nodes = QuestioningAgentSchema.nodes
-        self.conditional_edges = QuestioningAgentSchema.conditional_edges
-        self.direct_edges = QuestioningAgentSchema.direct_edges
-
-        # --- load dependent graphs ---
-        DEPENDENT_GRAPHS = {}
-        self.subgraphs = {k: v() for k, v in DEPENDENT_GRAPHS.items()}
-        self.state_mapping = QuestioningAgentSchema.state_mapping
+        # Import schema definitions
+        self.nodes = DiagnosticAgentSchema.nodes
+        self.conditional_edges = DiagnosticAgentSchema.conditional_edges
+        self.direct_edges = DiagnosticAgentSchema.direct_edges
+        self.state_mapping = DiagnosticAgentSchema.state_mapping
         
-        # --- load tools ---
-        self.tools = QuestioningAgentTool(llm_client)
+        # Initialize tool
+        self.tool = DiagnosticAgentTool(llm_client)
     
-    def passthrough(self, state: dict) -> dict:
-        """Implement the node here"""
+    def diagnose(self, state: dict) -> dict:
+        """
+        Analyze the current prompt and generate diagnostic questions.
+        
+        Args:
+            state: DiagnosticAgentState containing:
+                - system_prompt: Diagnostic criteria
+                - current_prompt: Prompt to analyze
+                
+        Returns:
+            Updated state with question_list populated
+        """
+        system_prompt = state["system_prompt"]
+        current_prompt = state["current_prompt"]
+        
+        # Use tool to generate questions
+        question_list = self.tool.diagnose_prompt(system_prompt, current_prompt)
+        
+        # Update state
+        state["question_list"] = question_list
+        
         return state
     
     def compile(self):
-        """Compile the QuestioningAgent graph using BaseGraph logic."""
+        """Compile the DiagnosticAgent graph using BaseGraph logic."""
         return super().compile()
