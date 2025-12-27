@@ -44,10 +44,6 @@ Thumbs.db
 .coverage
 htmlcov/
 
-# Config
-config/*.json
-!config/example.json
-
 # Secrets
 .env
 *.key

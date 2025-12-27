@@ -1,0 +1,1 @@
+# Diagnostic prompt for input_output_skeleton stage
