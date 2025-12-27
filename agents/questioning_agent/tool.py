@@ -269,10 +269,10 @@ Based on the followup criteria in the system prompt, determine if this answer is
             if not followup_question.strip():
                 raise Exception("LLM generated empty followup question")
             
-            # options is optional 
+            # options 是可選的（可能是選項式或開放式）
             options = result.get("options", None)
             
-            # If options exist,then validate
+            # 如果有提供 options，才驗證格式
             if options is not None:
                 if not isinstance(options, list):
                     raise Exception("'options' field must be a list")
@@ -289,6 +289,12 @@ Based on the followup criteria in the system prompt, determine if this answer is
                 "need_followup": True,
                 "followup_question": followup_question,
                 "options": options  # 可能是 list 或 None
+            }
+        else:
+            return {
+                "need_followup": False,
+                "followup_question": None,
+                "options": None
             }
     
     @auto_wrap_error
