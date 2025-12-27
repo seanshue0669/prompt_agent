@@ -261,11 +261,7 @@ Based on the followup criteria in the system prompt, determine if this answer is
             if "followup_question" not in result:
                 raise Exception("LLM indicated followup needed but missing 'followup_question' field")
             
-            if "options" not in result:
-                raise Exception("LLM indicated followup needed but missing 'options' field")
-            
             followup_question = result["followup_question"]
-            options = result["options"]
             
             if not isinstance(followup_question, str):
                 raise Exception("'followup_question' field must be a string")
@@ -273,27 +269,26 @@ Based on the followup criteria in the system prompt, determine if this answer is
             if not followup_question.strip():
                 raise Exception("LLM generated empty followup question")
             
-            if not isinstance(options, list):
-                raise Exception("'options' field must be a list")
+            # options is optional 
+            options = result.get("options", None)
             
-            if len(options) == 0:
-                raise Exception("LLM generated empty options list")
-            
-            # Validate all options are strings
-            for i, opt in enumerate(options):
-                if not isinstance(opt, str):
-                    raise Exception(f"Option {i} must be a string")
+            # If options exist,then validate
+            if options is not None:
+                if not isinstance(options, list):
+                    raise Exception("'options' field must be a list")
+                
+                if len(options) == 0:
+                    raise Exception("LLM generated empty options list")
+                
+                # Validate all options are strings
+                for i, opt in enumerate(options):
+                    if not isinstance(opt, str):
+                        raise Exception(f"Option {i} must be a string")
             
             return {
                 "need_followup": True,
                 "followup_question": followup_question,
-                "options": options
-            }
-        else:
-            return {
-                "need_followup": False,
-                "followup_question": None,
-                "options": None
+                "options": options  # 可能是 list 或 None
             }
     
     @auto_wrap_error
