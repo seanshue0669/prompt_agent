@@ -47,5 +47,4 @@ htmlcov/
 # Secrets
 .env
 *.key
-config.json
 secrets.json
