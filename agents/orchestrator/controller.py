@@ -27,7 +27,7 @@ class Orchestrator(BaseGraph):
     5. Execution Strategy Robustness
     6. Input/Output Robustness
     
-    Each stage follows: Diagnostic → Questioning → Integration
+    Each stage follows: Diagnostic -> Questioning -> Integration
     """
 
     def __init__(self, llm_client: LLMClient, initial_prompt: str):
@@ -40,6 +40,18 @@ class Orchestrator(BaseGraph):
         
         # Initialize tool (loads config)
         self.tool = OrchestratorTool()
+
+        # Override conditional edges so routing uses controller logic.
+        self.conditional_edges = [
+            ("increment_dialogue_idx", self.route_after_questioning, {
+                "call_questioning": "call_questioning",
+                "call_integration": "call_integration"
+            }),
+            ("update_stage", self.route_after_integration, {
+                "init_stage": "init_stage",
+                END: END
+            })
+        ]
         
         # Store initial prompt
         self.initial_prompt = initial_prompt
@@ -79,18 +91,19 @@ class Orchestrator(BaseGraph):
         Resets answer_list, question_list, dialogue_idx, followup_count.
         Increments stage_idx if this is not the first stage.
         """
+        updates = {
+            "question_list": [],
+            "answer_list": [],
+            "dialogue_idx": 0,
+            "followup_count": 0
+        }
+        
         # If this is the very first call, initialize everything
         if "current_prompt" not in state or not state["current_prompt"]:
-            state["current_prompt"] = self.initial_prompt
-            state["stage_idx"] = 1
+            updates["current_prompt"] = self.initial_prompt
+            updates["stage_idx"] = 1
         
-        # Reset for new stage
-        state["question_list"] = []
-        state["answer_list"] = []
-        state["dialogue_idx"] = 0
-        state["followup_count"] = 0
-        
-        return state
+        return updates
     
     def call_diagnostic(self, state: dict) -> dict:
         """
@@ -98,16 +111,16 @@ class Orchestrator(BaseGraph):
         """
         stage_idx = state["stage_idx"]
         
-        # Inject diagnostic system prompt
+        # Inject diagnostic system prompt into state for subgraph
         state["system_prompt"] = self.tool.get_system_prompt(stage_idx, "diagnostic")
         
         # Call DiagnosticAgent subgraph
         result = self.subgraphs["diagnostic_agent"]("diagnostic", state)
         
-        # Update state with results
-        state.update(result)
-        
-        return state
+        # Return only the fields that changed
+        return {
+            "question_list": result.get("question_list", [])
+        }
     
     def call_questioning(self, state: dict) -> dict:
         """
@@ -116,17 +129,18 @@ class Orchestrator(BaseGraph):
         """
         stage_idx = state["stage_idx"]
         
-        # Inject BOTH questioning system prompts
+        # Inject BOTH questioning system prompts into state for subgraph
         state["system_prompt_followup"] = self.tool.get_system_prompt(stage_idx, "questioning_followup")
         state["system_prompt_compress"] = self.tool.get_system_prompt(stage_idx, "questioning_compress")
         
         # Call QuestioningAgent subgraph
         result = self.subgraphs["questioning_agent"]("questioning", state)
         
-        # Update state with results
-        state.update(result)
-        
-        return state
+        # Return only the fields that changed
+        return {
+            "answer_list": result.get("answer_list", []),
+            "followup_count": result.get("followup_count", 0)
+        }
     
     def increment_dialogue_idx(self, state: dict) -> dict:
         """
@@ -134,9 +148,10 @@ class Orchestrator(BaseGraph):
         This node separates the questioning action from the index update,
         allowing route_after_questioning to make correct routing decisions.
         """
-        state["dialogue_idx"] += 1
-        
-        return state
+        return {
+            "dialogue_idx": state["dialogue_idx"] + 1,
+            "followup_count": 0  # Reset followup count for next question
+        }
     
     def call_integration(self, state: dict) -> dict:
         """
@@ -144,24 +159,24 @@ class Orchestrator(BaseGraph):
         """
         stage_idx = state["stage_idx"]
         
-        # Inject integration system prompt
+        # Inject integration system prompt into state for subgraph
         state["system_prompt"] = self.tool.get_system_prompt(stage_idx, "integration")
         
         # Call IntegrationAgent subgraph
         result = self.subgraphs["integration_agent"]("integration", state)
         
-        # Update state with results (current_prompt will be updated)
-        state.update(result)
-        
-        return state
+        # Return only the fields that changed
+        return {
+            "current_prompt": result.get("current_prompt", state["current_prompt"])
+        }
     
     def update_stage(self, state: dict) -> dict:
         """
         Update stage_idx to move to next stage.
         """
-        state["stage_idx"] += 1
-        
-        return state
+        return {
+            "stage_idx": state["stage_idx"] + 1
+        }
     
     # ========================================================
     # Edge routing implementations

@@ -18,6 +18,8 @@ class CLIInterface:
         self.terminal_width = terminal_width
         self.conversation_buffer: List[tuple[str, str]] = []  # [(role, message), ...]
         self.max_buffer_size = 10
+        self.pending_system_message_index: Optional[int] = None
+        self.waiting_message_text = "等待LLM回覆中"
         
         # Current stage information
         self.current_stage = 1
@@ -95,9 +97,9 @@ class CLIInterface:
         
         Args:
             stage_idx: Current stage number (1-6)
-            substage: Current substage ("診斷", "對話", or "總結")
-            question_idx: Current question index (for "對話" substage)
-            total_questions: Total number of questions (for "對話" substage)
+            substage: Current substage label (e.g., "diagnosis", "dialogue", "integration")
+            question_idx: Current question index (used for the dialogue substage)
+            total_questions: Total number of questions (used for the dialogue substage)
         """
         self.current_stage = stage_idx
         self.current_substage = substage
@@ -123,6 +125,46 @@ class CLIInterface:
         
         # Refresh display
         self._refresh_display()
+
+    def _replace_pending_system_message(self, message: str) -> bool:
+        """Replace a pending system message if one exists."""
+        idx = self.pending_system_message_index
+        if idx is None:
+            return False
+        if idx < 0 or idx >= len(self.conversation_buffer):
+            self.pending_system_message_index = None
+            return False
+        self.conversation_buffer[idx] = ("system", message)
+        self.pending_system_message_index = None
+        self._refresh_display()
+        return True
+
+    def show_system_message(self, message: str):
+        """Display a system message, replacing a pending waiting message if present."""
+        if not self._replace_pending_system_message(message):
+            self.show_message("system", message)
+
+    def show_waiting_message(self, message: Optional[str] = None):
+        """Display a waiting placeholder for an upcoming system response."""
+        if message is None:
+            message = self.waiting_message_text
+        idx = self.pending_system_message_index
+        if idx is not None and 0 <= idx < len(self.conversation_buffer):
+            self.conversation_buffer[idx] = ("system", message)
+            self._refresh_display()
+            return
+        self.show_message("system", message)
+        self.pending_system_message_index = len(self.conversation_buffer) - 1
+
+    def clear_waiting_message(self):
+        """Remove a pending waiting placeholder if it exists."""
+        idx = self.pending_system_message_index
+        if idx is None:
+            return
+        if 0 <= idx < len(self.conversation_buffer):
+            self.conversation_buffer.pop(idx)
+        self.pending_system_message_index = None
+        self._refresh_display()
     
     def get_user_input(self, prompt: Optional[str] = None, options: Optional[List[str]] = None) -> str:
         """
@@ -130,8 +172,8 @@ class CLIInterface:
         
         Args:
             prompt: Optional system prompt/question to display first
-            options: Optional list of options (e.g., ["A) ...", "B) ...", "C) 其他", "D) 沒有想法"])
-            
+            options: Optional list of options (e.g., ["A) ...", "B) ...", "C) Other", "D) None"])
+        
         Returns:
             User's input as a single string (multi-line preserved)
         """
@@ -149,7 +191,7 @@ class CLIInterface:
         
         # Show the prompt as a system message
         if full_message:
-            self.show_message("system", full_message.strip())
+            self.show_system_message(full_message.strip())
         
         # Display input instructions
         if options:
@@ -178,6 +220,7 @@ class CLIInterface:
     def clear_conversation(self):
         """Clear the conversation buffer (called when moving to next question)"""
         self.conversation_buffer.clear()
+        self.pending_system_message_index = None
         self._refresh_display()
 
 

@@ -81,14 +81,13 @@ class QuestioningAgent(BaseGraph):
         )
         
         # Append compressed result to answer_list
-        answer_list.append(compressed)
-        
-        # Update state
-        state["answer_list"] = answer_list
-        # Reset followup_count (not really used anymore, but keep for state consistency)
-        state["followup_count"] = 0
-        
-        return state
+        updated_answer_list = answer_list + [compressed]
+
+        # Return only the fields that changed
+        return {
+            "answer_list": updated_answer_list,
+            "followup_count": 0
+        }
     
     def compile(self):
         """Compile the QuestioningAgent graph using BaseGraph logic."""

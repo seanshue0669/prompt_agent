@@ -51,6 +51,17 @@ def print_state(state, title="State"):
     print()
 
 
+
+
+def write_prompt_output(prompt: str, output_dir: str = "outputs", filename: str = "result.txt"):
+    """Write the prompt to a text file for later review."""
+    os.makedirs(output_dir, exist_ok=True)
+    output_path = os.path.join(output_dir, filename)
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(prompt)
+    print(f"Saved prompt to: {output_path}")
+
+
 def run_diagnostic(llm_client, stage_idx, test_prompt):
     """Run DiagnosticAgent and return state."""
     print("\n[自動執行] DiagnosticAgent - 生成問題...")
@@ -96,13 +107,19 @@ def run_questioning(llm_client, stage_idx, current_prompt, question_list):
         "question_list": question_list,
         "dialogue_idx": 0,
         "answer_list": [],
-        "followup_count": 0
+        "followup_count": 0,
+        "stage_idx": stage_idx
     }
     
     print_state(state, "QuestioningAgent 傳入 State")
     
     # Ask each question
     for i in range(len(question_list)):
+        state["dialogue_idx"] = i
+        state["stage_idx"] = stage_idx
+        cli = RuntimeConfig.cli_interface
+        if cli is not None and i > 0:
+            cli.clear_conversation()
         result = compiled.invoke(state)
         state = result
     
@@ -186,9 +203,11 @@ def main():
     choice = input("\n選擇 (1-3): ").strip()
     
     try:
+        final_prompt = None
         if choice == "1":
             # Test Diagnostic only
-            run_diagnostic(llm_client, stage_idx, test_prompt)
+            diagnostic_result = run_diagnostic(llm_client, stage_idx, test_prompt)
+            final_prompt = diagnostic_result.get("current_prompt", test_prompt)
             
         elif choice == "2":
             # Test Questioning (auto-run Diagnostic first)
@@ -196,7 +215,8 @@ def main():
             question_list = diagnostic_result["question_list"]
             current_prompt = diagnostic_result["current_prompt"]
             
-            run_questioning(llm_client, stage_idx, current_prompt, question_list)
+            questioning_result = run_questioning(llm_client, stage_idx, current_prompt, question_list)
+            final_prompt = current_prompt
             
         elif choice == "3":
             # Test Integration (auto-run Diagnostic + Questioning first)
@@ -208,12 +228,15 @@ def main():
                                                 current_prompt, question_list)
             answer_list = questioning_result["answer_list"]
             
-            run_integration(llm_client, stage_idx, current_prompt, answer_list)
+            integration_result = run_integration(llm_client, stage_idx, current_prompt, answer_list)
+            final_prompt = integration_result.get("current_prompt", current_prompt)
             
         else:
             print("無效的選擇!")
             sys.exit(1)
             
+        if final_prompt:
+            write_prompt_output(final_prompt)
         print("\n測試完成!")
         
     except KeyboardInterrupt:

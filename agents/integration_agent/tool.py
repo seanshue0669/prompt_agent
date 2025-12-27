@@ -41,18 +41,19 @@ class IntegrationAgentTool(BaseTool):
         
         # Construct user prompt
         user_prompt = f"""Current prompt:
-```
-{current_prompt}
-```
+        ```
+        {current_prompt}
+        ```
 
-User answers from diagnostic questions:
-{formatted_answers}
+        User answers from diagnostic questions:
+        {formatted_answers}
 
-Based on these answers, please improve the prompt according to the integration strategy in the system prompt."""
-        
+        Based on these answers, please improve the prompt according to the integration strategy in the system prompt."""
+                
         # Configure for JSON output
         config_override = {
-            "response_format": {"type": "json_object"}
+            "response_format": {"type": "json_object"},
+            "reasoning_effort": "high",
         }
         
         # Call LLM
@@ -74,15 +75,15 @@ Based on these answers, please improve the prompt according to the integration s
         
         # Extract improved prompt
         # Expected format: {"improved_prompt": "..."}
-        if "improved_prompt" not in result:
+        if "current_prompt" not in result:
             raise Exception("LLM response missing 'improved_prompt' field")
         
-        improved_prompt = result["improved_prompt"]
+        improved_prompt = result["current_prompt"]
         
         if not isinstance(improved_prompt, str):
             raise Exception("'improved_prompt' field must be a string")
         
         if not improved_prompt.strip():
-            raise Exception("LLM generated empty improved prompt")
+            raise Exception("LLM generated empty current_prompt")
         
         return improved_prompt

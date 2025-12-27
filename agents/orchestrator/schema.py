@@ -8,10 +8,10 @@ from langgraph.graph import END
 # ========================================================
 class OrchestratorState(TypedDict):
     """
-    State for Orchestrator (Top Controller).
+    State for Orchestrator (top-level controller).
     
     Manages the overall flow across 6 diagnostic stages.
-    Each stage goes through: Diagnostic → Questioning → Integration
+    Each stage goes through: Diagnostic -> Questioning -> Integration
     
     Fields:
         current_prompt: Current version of the prompt (updated after each stage)

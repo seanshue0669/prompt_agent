@@ -68,6 +68,10 @@ class QuestioningAgentTool(BaseTool):
             "question": question,
             "answer": answer
         })
+
+        cli = RuntimeConfig.cli_interface
+        if cli is not None:
+            cli.show_waiting_message()
         
         # Followup loop
         followup_count = 0
@@ -227,7 +231,8 @@ Based on the followup criteria in the system prompt, determine if this answer is
                         "additionalProperties": False
                     }
                 }
-            }
+            },
+            
         }
         
         # Call LLM
@@ -327,14 +332,15 @@ Based on the followup criteria in the system prompt, determine if this answer is
         # Construct user prompt
         user_prompt = f"""Original question: {original_question}
 
-Conversation history:
-{formatted_history}
+        Conversation history:
+        {formatted_history}
 
-Based on the entire conversation, compress this into a single concise Q&A pair."""
-        
+        Based on the entire conversation, compress this into a single concise Q&A pair."""
+                
         # Configure for JSON output with CoT
         config_override = {
             "response_format": {"type": "json_object"},
+            "reasoning_effort": "high",
             "max_completion_tokens": 1000  # More tokens for CoT
         }
         

@@ -36,7 +36,7 @@ class DiagnosticAgentTool(BaseTool):
         
         # Configure for JSON output
         config_override = {
-                    "response_format": {
+            "response_format": {
                 "type": "json_schema",
                 "json_schema": {
                     "name": "test_response",
@@ -53,7 +53,8 @@ class DiagnosticAgentTool(BaseTool):
                         "additionalProperties": False
                     }
                 }
-            }
+            },
+            "reasoning_effort": "high"
         }
         
         # Call LLM
