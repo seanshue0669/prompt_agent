@@ -36,19 +36,22 @@ class QuestioningAgent(BaseGraph):
         """
         Ask the current question and collect user's answer.
         May generate and ask followup questions based on answer quality.
+        Compresses entire conversation at the end.
         
         Args:
             state: QuestioningAgentState containing:
-                - system_prompt: Prompt for question handling
+                - system_prompt_followup: Prompt for followup logic
+                - system_prompt_compress: Prompt for compression
                 - question_list: All questions for this stage
                 - dialogue_idx: Current question index
                 - answer_list: Existing answers
                 - followup_count: Current followup count
                 
         Returns:
-            Updated state with new answer appended to answer_list
+            Updated state with compressed answer appended to answer_list
         """
-        system_prompt = state["system_prompt"]
+        system_prompt_followup = state["system_prompt_followup"]
+        system_prompt_compress = state["system_prompt_compress"]
         question_list = state["question_list"]
         dialogue_idx = state["dialogue_idx"]
         answer_list = state["answer_list"]
@@ -60,59 +63,75 @@ class QuestioningAgent(BaseGraph):
         
         current_question = question_list[dialogue_idx]
         
-        # Determine stage_idx for CLI display (extract from system_prompt or use default)
-        # For now, use a placeholder - will be set by Orchestrator
-        stage_idx = 1  # This will be properly set when called from Orchestrator
+        # Determine stage_idx for CLI display
+        stage_idx = 1  # Will be properly set when called from Orchestrator
         
-        # Ask question and collect answer
+        # Track entire conversation
+        conversation_history = []
+        
+        # Ask original question
         answer = self.tool.ask_question_and_collect(
-            system_prompt=system_prompt,
+            system_prompt=system_prompt_followup,
             question=current_question,
             stage_idx=stage_idx,
-            question_idx=dialogue_idx + 1,  # Display as 1-indexed
+            question_idx=dialogue_idx + 1,
             total_questions=len(question_list)
         )
         
-        # Append answer to list
-        answer_list.append(answer)
+        conversation_history.append({
+            "question": current_question,
+            "answer": answer
+        })
         
-        # Check if followup is needed
-        followup_result = self.tool.should_followup(
-            system_prompt=system_prompt,
-            question=current_question,
-            answer=answer,
-            followup_count=followup_count,
-            max_followup=self.max_followup_count
-        )
+        # Followup loop
+        current_followup_count = followup_count
         
-        if followup_result["need_followup"]:
-            # Generate followup question
+        while current_followup_count < self.max_followup_count:
+            # Check if followup needed
+            followup_result = self.tool.should_followup(
+                system_prompt=system_prompt_followup,
+                question=current_question,
+                answer=answer,
+                followup_count=current_followup_count,
+                max_followup=self.max_followup_count
+            )
+            
+            if not followup_result["need_followup"]:
+                break
+            
+            # Generate and ask followup
             followup_question = followup_result["followup_question"]
+            current_followup_count += 1
             
-            # Increment followup count
-            state["followup_count"] = followup_count + 1
-            
-            # Ask followup question recursively
             followup_answer = self.tool.ask_question_and_collect(
-                system_prompt=system_prompt,
+                system_prompt=system_prompt_followup,
                 question=followup_question,
                 stage_idx=stage_idx,
                 question_idx=dialogue_idx + 1,
                 total_questions=len(question_list)
             )
             
-            # Append followup answer
-            answer_list.append(followup_answer)
+            conversation_history.append({
+                "question": followup_question,
+                "answer": followup_answer
+            })
             
-            # Check if another followup is needed (recursive)
-            # For simplicity, limit to one level of followup per call
-            # Orchestrator will call again if needed
-        else:
-            # Reset followup count for next question
-            state["followup_count"] = 0
+            # Update answer for next iteration check
+            answer = followup_answer
+        
+        # Compress entire conversation
+        compressed = self.tool.compress_conversation(
+            system_prompt=system_prompt_compress,
+            original_question=current_question,
+            conversation_history=conversation_history
+        )
+        
+        # Append compressed result
+        answer_list.append(compressed)
         
         # Update state
         state["answer_list"] = answer_list
+        state["followup_count"] = current_followup_count
         
         return state
     

@@ -1,42 +1,48 @@
 {
-  "max_followup_count": 2,
+  "max_followup_count": 6,
   "stage_names": [
-    "input_output_skeleton",
     "execution_strategy_skeleton",
-    "input_output_disambiguation",
+    "input_output_skeleton",
     "execution_strategy_disambiguation",
-    "execution_strategy_robustness",
-    "input_output_robustness"
+    "input_output_disambiguation",
+    "input_output_robustness",
+    "execution_strategy_robustness"
   ],
   "stage_prompts": {
-    "input_output_skeleton": {
-      "diagnostic": "prompts/input_output_skeleton/diagnostic.txt",
-      "questioning": "prompts/input_output_skeleton/questioning.txt",
-      "integration": "prompts/input_output_skeleton/integration.txt"
-    },
     "execution_strategy_skeleton": {
       "diagnostic": "prompts/execution_strategy_skeleton/diagnostic.txt",
-      "questioning": "prompts/execution_strategy_skeleton/questioning.txt",
+      "questioning_followup": "prompts/execution_strategy_skeleton/questioning_followup.txt",
+      "questioning_compress": "prompts/execution_strategy_skeleton/questioning_compress.txt",
       "integration": "prompts/execution_strategy_skeleton/integration.txt"
     },
-    "input_output_disambiguation": {
-      "diagnostic": "prompts/input_output_disambiguation/diagnostic.txt",
-      "questioning": "prompts/input_output_disambiguation/questioning.txt",
-      "integration": "prompts/input_output_disambiguation/integration.txt"
+    "input_output_skeleton": {
+      "diagnostic": "prompts/input_output_skeleton/diagnostic.txt",
+      "questioning_followup": "prompts/input_output_skeleton/questioning_followup.txt",
+      "questioning_compress": "prompts/input_output_skeleton/questioning_compress.txt",
+      "integration": "prompts/input_output_skeleton/integration.txt"
     },
     "execution_strategy_disambiguation": {
       "diagnostic": "prompts/execution_strategy_disambiguation/diagnostic.txt",
-      "questioning": "prompts/execution_strategy_disambiguation/questioning.txt",
+      "questioning_followup": "prompts/execution_strategy_disambiguation/questioning_followup.txt",
+      "questioning_compress": "prompts/execution_strategy_disambiguation/questioning_compress.txt",
       "integration": "prompts/execution_strategy_disambiguation/integration.txt"
+    },
+    "input_output_disambiguation": {
+      "diagnostic": "prompts/input_output_disambiguation/diagnostic.txt",
+      "questioning_followup": "prompts/input_output_disambiguation/questioning_followup.txt",
+      "questioning_compress": "prompts/input_output_disambiguation/questioning_compress.txt",
+      "integration": "prompts/input_output_disambiguation/integration.txt"
     },
     "execution_strategy_robustness": {
       "diagnostic": "prompts/execution_strategy_robustness/diagnostic.txt",
-      "questioning": "prompts/execution_strategy_robustness/questioning.txt",
+      "questioning_followup": "prompts/execution_strategy_robustness/questioning_followup.txt",
+      "questioning_compress": "prompts/execution_strategy_robustness/questioning_compress.txt",
       "integration": "prompts/execution_strategy_robustness/integration.txt"
     },
     "input_output_robustness": {
       "diagnostic": "prompts/input_output_robustness/diagnostic.txt",
-      "questioning": "prompts/input_output_robustness/questioning.txt",
+      "questioning_followup": "prompts/input_output_robustness/questioning_followup.txt",
+      "questioning_compress": "prompts/input_output_robustness/questioning_compress.txt",
       "integration": "prompts/input_output_robustness/integration.txt"
     }
   }

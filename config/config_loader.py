@@ -94,7 +94,7 @@ def validate_config(config: Dict[str, Any]) -> None:
         raise ValueError(msg)
     
     # Validate each stage has all prompt types
-    required_prompt_types = ["diagnostic", "questioning", "integration"]
+    required_prompt_types = ["diagnostic", "questioning_followup", "questioning_compress", "integration"]
     for stage_name, prompts in config["stage_prompts"].items():
         for prompt_type in required_prompt_types:
             if prompt_type not in prompts:

@@ -1,5 +1,6 @@
 # agents/questioning_agent/tool.py
 import json
+from typing import List
 from agentcore import LLMClient, BaseTool, auto_wrap_error
 from config.runtime_config import RuntimeConfig
 
@@ -149,3 +150,76 @@ Based on the followup criteria in the system prompt, determine if this answer is
                 "need_followup": False,
                 "followup_question": None
             }
+    # Add new method for compression
+@auto_wrap_error
+def compress_conversation(
+    self,
+    system_prompt: str,
+    original_question: str,
+    conversation_history: List[dict]
+) -> str:
+    """
+    Compress entire conversation into a concise Q&A pair.
+    
+    Args:
+        system_prompt: System prompt for compression (with CoT)
+        original_question: The original question asked
+        conversation_history: List of {"question": str, "answer": str} dicts
+        
+    Returns:
+        Compressed Q&A string like "Q: ... A: ..."
+        
+    Raises:
+        Exception: If LLM call fails or returns invalid JSON
+    """
+    # Format conversation history
+    formatted_history = ""
+    for i, turn in enumerate(conversation_history, 1):
+        formatted_history += f"{i}. Q: {turn['question']}\n"
+        formatted_history += f"   A: {turn['answer']}\n\n"
+    
+    # Construct user prompt
+    user_prompt = f"""Original question: {original_question}
+
+Conversation history:
+{formatted_history}
+
+Based on the entire conversation, compress this into a single concise Q&A pair."""
+    
+    # Configure for JSON output with CoT
+    config_override = {
+        "response_format": {"type": "json_object"},
+        "max_completion_tokens": 1000  # More tokens for CoT
+    }
+    
+    # Call LLM
+    response = self.client.invoke(
+        user_prompt=user_prompt,
+        system_prompt=system_prompt,
+        config_override=config_override
+    )
+    
+    # Parse JSON response
+    raw = (response.get("content") or "").strip()
+    if not raw:
+        raise Exception("LLM returned empty content")
+    
+    try:
+        result = json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise Exception(f"Failed to parse LLM response as JSON: {e}")
+    
+    # Extract compressed Q&A
+    # Expected format: {"compressed": "Q: ... A: ..."}
+    if "compressed" not in result:
+        raise Exception("LLM response missing 'compressed' field")
+    
+    compressed = result["compressed"]
+    
+    if not isinstance(compressed, str):
+        raise Exception("'compressed' field must be a string")
+    
+    if not compressed.strip():
+        raise Exception("LLM generated empty compressed Q&A")
+    
+    return compressed

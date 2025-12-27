@@ -1,1 +1,0 @@
-# Questioning prompt for execution_strategy_skeleton stage

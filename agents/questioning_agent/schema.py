@@ -20,7 +20,8 @@ class QuestioningAgentState(TypedDict):
         answer_list: Updated with new answers (appended)
         followup_count: Updated followup count
     """
-    system_prompt: str
+    system_prompt_followup: str  
+    system_prompt_compress: str
     question_list: List[str]
     dialogue_idx: int
     answer_list: List[str]
@@ -55,7 +56,8 @@ class QuestioningAgentSchema(BaseSchema):
     state_mapping = {
         "questioning": {
             "input": {
-                "system_prompt": "system_prompt",
+                "system_prompt_followup": "system_prompt_followup",  # Changed
+                "system_prompt_compress": "system_prompt_compress",  # New
                 "question_list": "question_list",
                 "dialogue_idx": "dialogue_idx",
                 "answer_list": "answer_list",

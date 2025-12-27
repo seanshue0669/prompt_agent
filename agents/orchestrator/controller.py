@@ -116,8 +116,9 @@ class Orchestrator(BaseGraph):
         """
         stage_idx = state["stage_idx"]
         
-        # Inject questioning system prompt
-        state["system_prompt"] = self.tool.get_system_prompt(stage_idx, "questioning")
+        # Inject BOTH questioning system prompts
+        state["system_prompt_followup"] = self.tool.get_system_prompt(stage_idx, "questioning_followup")
+        state["system_prompt_compress"] = self.tool.get_system_prompt(stage_idx, "questioning_compress")
         
         # Call QuestioningAgent subgraph
         result = self.subgraphs["questioning_agent"]("questioning", state)
