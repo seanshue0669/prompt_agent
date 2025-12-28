@@ -41,10 +41,9 @@ def ask_question(state: QuestioningAgentState) -> dict:
 def check_followup(state: QuestioningAgentState) -> str:
     """
     Decide whether to ask followup question or move to next question.
-    Returns "followup" or "next_question".
     Implementation in controller.
     """
-    return "next_question"
+    raise NotImplementedError("Routing logic implemented in controller.")
 
 # ========================================================
 # Schema Definition

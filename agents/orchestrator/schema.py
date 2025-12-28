@@ -74,32 +74,29 @@ def update_stage(state: OrchestratorState) -> dict:
 # ========================================================
 # Edge definitions
 # ========================================================
+def route_after_diagnostic(state: OrchestratorState) -> str:
+    """
+    Route after DiagnosticAgent.
+    Implementation in controller.
+    """
+    raise NotImplementedError("Routing logic implemented in controller.")
+
+
 def route_after_questioning(state: OrchestratorState) -> str:
     """
     Route after incrementing dialogue_idx.
-    
-    Returns:
-        "call_questioning": If more questions remain
-        "call_integration": If all questions answered
+    Implementation in controller.
     """
-    dialogue_idx = state["dialogue_idx"]
-    question_list = state["question_list"]
-    
-    if dialogue_idx < len(question_list):
-        return "call_questioning"
-    else:
-        return "call_integration"
+    raise NotImplementedError("Routing logic implemented in controller.")
+
 
 def route_after_integration(state: OrchestratorState) -> str:
     """
     Route after IntegrationAgent based on stage progress.
-    
-    Returns:
-        "init_stage": If more stages remain
-        END: If all stages completed
+    Implementation in controller.
     """
-    # This will be implemented in controller with actual stage count check
-    return END
+    raise NotImplementedError("Routing logic implemented in controller.")
+
 
 # ========================================================
 # Schema Definition
@@ -120,6 +117,10 @@ class OrchestratorSchema(BaseSchema):
     ]
     
     conditional_edges = [
+        ("call_diagnostic", route_after_diagnostic, {
+            "call_questioning": "call_questioning",
+            "update_stage": "update_stage"
+        }),
         ("increment_dialogue_idx", route_after_questioning, {
             "call_questioning": "call_questioning",
             "call_integration": "call_integration"
@@ -129,10 +130,8 @@ class OrchestratorSchema(BaseSchema):
             END: END
         })
     ]
-    
     direct_edges = [
         ("init_stage", "call_diagnostic"),
-        ("call_diagnostic", "call_questioning"),
         ("call_questioning", "increment_dialogue_idx"),
         ("call_integration", "update_stage")
     ]

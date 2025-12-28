@@ -83,8 +83,4 @@ class DiagnosticAgentTool(BaseTool):
         
         if not isinstance(questions, list):
             raise Exception("'questions' field must be a list")
-        
-        if len(questions) == 0:
-            raise Exception("LLM generated empty question list")
-        
         return questions

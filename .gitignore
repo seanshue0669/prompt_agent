@@ -43,6 +43,8 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
+test_config.json
+system_test_config.json
 
 # Secrets
 .env

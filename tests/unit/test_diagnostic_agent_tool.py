@@ -113,11 +113,11 @@ def test_diagnose_prompt_missing_questions_field():
 
 @test_wrapper
 def test_diagnose_prompt_empty_question_list():
-    """Test error handling when questions list is empty"""
+    """Test handling when questions list is empty"""
     # Setup mock LLM client
     mock_client = Mock()
     mock_client.invoke.return_value = {
-        "content": '{"questions": []}',
+        "content": '{\"questions\": []}',
         "tokens_in": 10,
         "tokens_out": 5
     }
@@ -125,12 +125,9 @@ def test_diagnose_prompt_empty_question_list():
     # Create tool
     tool = DiagnosticAgentTool(mock_client)
     
-    # Call diagnose_prompt - should raise exception
-    try:
-        tool.diagnose_prompt("system", "prompt")
-        assert False, "Should have raised exception"
-    except Exception as e:
-        assert "empty" in str(e).lower()
+    result = tool.diagnose_prompt("system", "prompt")
+    
+    assert result == []
 
 
 @test_wrapper

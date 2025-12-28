@@ -43,6 +43,10 @@ class Orchestrator(BaseGraph):
 
         # Override conditional edges so routing uses controller logic.
         self.conditional_edges = [
+            ("call_diagnostic", self.route_after_diagnostic, {
+                "call_questioning": "call_questioning",
+                "update_stage": "update_stage"
+            }),
             ("increment_dialogue_idx", self.route_after_questioning, {
                 "call_questioning": "call_questioning",
                 "call_integration": "call_integration"
@@ -52,7 +56,6 @@ class Orchestrator(BaseGraph):
                 END: END
             })
         ]
-        
         # Store initial prompt
         self.initial_prompt = initial_prompt
         
@@ -182,6 +185,22 @@ class Orchestrator(BaseGraph):
     # Edge routing implementations
     # ========================================================
     
+    def route_after_diagnostic(self, state: dict) -> str:
+        """
+        Route after DiagnosticAgent.
+        
+        Returns:
+            "call_questioning": If questions exist
+            "update_stage": If no questions exist
+        """
+        question_list = state["question_list"]
+        
+        if len(question_list) == 0:
+            return "update_stage"
+        else:
+            return "call_questioning"
+
+
     def route_after_questioning(self, state: dict) -> str:
         """
         Route after incrementing dialogue_idx.
@@ -209,7 +228,7 @@ class Orchestrator(BaseGraph):
         stage_idx = state["stage_idx"]
         total_stages = len(self.tool.stage_names)
         
-        if stage_idx < total_stages:
+        if stage_idx <= total_stages:
             return "init_stage"
         else:
             return END

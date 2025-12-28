@@ -96,6 +96,31 @@ def test_orchestrator_init_stage():
 
 
 @test_wrapper
+def test_orchestrator_route_after_diagnostic():
+    """Test routing logic after diagnostic"""
+    mock_config = {
+        "max_followup_count": 2,
+        "stage_names": ["stage_1"],
+        "stage_prompts": {"stage_1": {"diagnostic": "p", "questioning": "p", "integration": "p"}}
+    }
+    
+    RuntimeConfig.config_data = mock_config
+    mock_client = Mock()
+    
+    with patch('agents.orchestrator.tool.load_config', return_value=mock_config):
+        with patch('agents.orchestrator.tool.validate_config'):
+            orchestrator = Orchestrator(mock_client, "Test")
+            
+            state1 = {"question_list": []}
+            route1 = orchestrator.route_after_diagnostic(state1)
+            assert route1 == "update_stage"
+            
+            state2 = {"question_list": ["Q1"]}
+            route2 = orchestrator.route_after_diagnostic(state2)
+            assert route2 == "call_questioning"
+
+
+@test_wrapper
 def test_orchestrator_route_after_questioning():
     """Test routing logic after questioning"""
     mock_config = {
@@ -153,8 +178,8 @@ def test_orchestrator_route_after_integration():
             route1 = orchestrator.route_after_integration(state1)
             assert route1 == "init_stage"
             
-            # Test routing after final stage
-            state2 = {"stage_idx": 3}
+            # Test routing after final stage (stage_idx already incremented)
+            state2 = {"stage_idx": 4}
             route2 = orchestrator.route_after_integration(state2)
             from langgraph.graph import END
             assert route2 == END
@@ -242,6 +267,7 @@ if __name__ == "__main__":
     
     test_orchestrator_single_stage_flow()
     test_orchestrator_init_stage()
+    test_orchestrator_route_after_diagnostic()
     test_orchestrator_route_after_questioning()
     test_orchestrator_route_after_integration()
     test_orchestrator_update_stage()
