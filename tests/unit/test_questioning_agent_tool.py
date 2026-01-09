@@ -193,7 +193,7 @@ def test_check_followup_needed_at_max_limit():
     result = tool._check_followup_needed(
         system_prompt="Test",
         original_question="Test question",
-        current_answer="Test answer",
+        conversation_history=[{"question": "Test question", "answer": "Test answer", "options": None}],
         followup_count=2,  # At max
         max_followup=2
     )
@@ -223,7 +223,7 @@ def test_check_followup_needed_returns_true():
     result = tool._check_followup_needed(
         system_prompt="Test prompt",
         original_question="你的目標?",
-        current_answer="學習",
+        conversation_history=[{"question": "Test question", "answer": "Test answer", "options": None}],
         followup_count=0,
         max_followup=2
     )
@@ -253,7 +253,7 @@ def test_check_followup_needed_returns_false():
     result = tool._check_followup_needed(
         system_prompt="Test prompt",
         original_question="你的目標?",
-        current_answer="我希望成為專業的程式設計師,專精於後端開發",
+        conversation_history=[{"question": "Test question", "answer": "Test answer", "options": None}],
         followup_count=0,
         max_followup=2
     )
@@ -280,7 +280,7 @@ def test_check_followup_needed_missing_field():
     
     # Call should raise exception
     try:
-        tool._check_followup_needed("sys", "q", "a", 0, 2)
+        tool._check_followup_needed("sys", "q", [{"question": "q", "answer": "a", "options": None}], 0, 2)
         assert False, "Should have raised exception"
     except Exception as e:
         assert "need_followup" in str(e).lower()
@@ -302,7 +302,7 @@ def test_check_followup_needed_missing_followup_question():
     
     # Call should raise exception
     try:
-        tool._check_followup_needed("sys", "q", "a", 0, 2)
+        tool._check_followup_needed("sys", "q", [{"question": "q", "answer": "a", "options": None}], 0, 2)
         assert False, "Should have raised exception"
     except Exception as e:
         assert "followup_question" in str(e).lower()
@@ -324,7 +324,7 @@ def test_check_followup_needed_missing_options():
     
     # Call should raise exception
     try:
-        tool._check_followup_needed("sys", "q", "a", 0, 2)
+        tool._check_followup_needed("sys", "q", [{"question": "q", "answer": "a", "options": None}], 0, 2)
         assert False, "Should have raised exception"
     except Exception as e:
         assert "options" in str(e).lower()
@@ -346,7 +346,7 @@ def test_check_followup_needed_empty_options():
     
     # Call should raise exception
     try:
-        tool._check_followup_needed("sys", "q", "a", 0, 2)
+        tool._check_followup_needed("sys", "q", [{"question": "q", "answer": "a", "options": None}], 0, 2)
         assert False, "Should have raised exception"
     except Exception as e:
         assert "empty" in str(e).lower()
@@ -368,7 +368,7 @@ def test_check_followup_needed_options_not_strings():
     
     # Call should raise exception
     try:
-        tool._check_followup_needed("sys", "q", "a", 0, 2)
+        tool._check_followup_needed("sys", "q", [{"question": "q", "answer": "a", "options": None}], 0, 2)
         assert False, "Should have raised exception"
     except Exception as e:
         assert "string" in str(e).lower()

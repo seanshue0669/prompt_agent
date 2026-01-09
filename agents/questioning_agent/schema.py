@@ -22,6 +22,7 @@ class QuestioningAgentState(TypedDict):
     """
     system_prompt_followup: str  
     system_prompt_compress: str
+    stage_idx: int
     question_list: List[str]
     dialogue_idx: int
     answer_list: List[str]
@@ -57,6 +58,7 @@ class QuestioningAgentSchema(BaseSchema):
             "input": {
                 "system_prompt_followup": "system_prompt_followup",  # Changed
                 "system_prompt_compress": "system_prompt_compress",  # New
+                "stage_idx": "stage_idx",
                 "question_list": "question_list",
                 "dialogue_idx": "dialogue_idx",
                 "answer_list": "answer_list",

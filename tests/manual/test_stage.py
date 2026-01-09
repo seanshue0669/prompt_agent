@@ -25,11 +25,39 @@ from config.config_loader import load_config
 from cli.cli_interface import CLIInterface
 
 
+def get_config_root(config_path: str) -> str:
+    config_dir = os.path.dirname(os.path.abspath(config_path))
+    if os.path.basename(config_dir) == "json_config":
+        return os.path.abspath(os.path.join(config_dir, os.pardir))
+    return config_dir
+
+
+def resolve_prompt_value(prompt_value: str, config_root: str) -> str:
+    """Resolve a prompt value that may be a relative path under config."""
+    if os.path.isabs(prompt_value):
+        raise ValueError("test_prompt must be a relative path or inline prompt text")
+
+    candidate = os.path.abspath(os.path.join(config_root, prompt_value))
+    base_dir = os.path.abspath(config_root)
+    if os.path.isfile(candidate):
+        if os.path.commonpath([candidate, base_dir]) != base_dir:
+            raise ValueError("test_prompt path must be within the config directory")
+        with open(candidate, "r", encoding="utf-8") as handle:
+            return handle.read()
+
+    return prompt_value
+
+
 def load_test_config():
     """Load test configuration."""
-    config_path = "config/test_config.json"
+    config_path = "config/json_config/test_config.json"
     with open(config_path, 'r', encoding='utf-8') as f:
-        return json.load(f)
+        data = json.load(f)
+    data["test_prompt"] = resolve_prompt_value(
+        data.get("test_prompt", ""),
+        get_config_root(config_path)
+    )
+    return data
 
 
 def print_state(state, title="State"):
@@ -168,7 +196,7 @@ def main():
     
     # Load configurations
     print("\n載入配置...")
-    config = load_config("config/config.json")
+    config = load_config("config/json_config/config.json")
     test_config = load_test_config()
     test_prompt = test_config["test_prompt"]
     

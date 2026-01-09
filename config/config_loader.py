@@ -9,12 +9,19 @@ import os
 from typing import Dict, Any
 
 
-def load_config(config_path: str = "config/config.json") -> Dict[str, Any]:
+def _get_config_root(config_path: str) -> str:
+    config_dir = os.path.dirname(os.path.abspath(config_path))
+    if os.path.basename(config_dir) == "json_config":
+        return os.path.abspath(os.path.join(config_dir, os.pardir))
+    return config_dir
+
+
+def load_config(config_path: str = "config/json_config/config.json") -> Dict[str, Any]:
     """
     Load configuration from JSON file and resolve all prompt file paths.
     
     Args:
-        config_path: Path to config.json file
+        config_path: Path to config.json file in config/json_config
         
     Returns:
         Dict containing:
@@ -26,8 +33,8 @@ def load_config(config_path: str = "config/config.json") -> Dict[str, Any]:
         FileNotFoundError: If config file or prompt files not found
         json.JSONDecodeError: If config file is invalid JSON
     """
-    # Get the directory containing the config file
-    config_dir = os.path.dirname(config_path)
+    # Resolve prompt paths relative to the config root (parent of json_config)
+    config_root = _get_config_root(config_path)
     
     # Load config.json
     with open(config_path, 'r', encoding='utf-8') as f:
@@ -41,8 +48,11 @@ def load_config(config_path: str = "config/config.json") -> Dict[str, Any]:
         resolved_prompts[stage_name] = {}
         
         for prompt_type, relative_path in prompts.items():
-            # Construct full path relative to config directory
-            full_path = os.path.join(config_dir, relative_path)
+            # Construct full path relative to config root
+            if os.path.isabs(relative_path):
+                full_path = relative_path
+            else:
+                full_path = os.path.join(config_root, relative_path)
             
             # Read prompt file content
             try:

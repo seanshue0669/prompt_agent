@@ -13,7 +13,7 @@ class OrchestratorTool(BaseTool):
         super().__init__()
         
         # Load and validate config
-        config = load_config("config/config.json")
+        config = load_config("config/json_config/config.json")
         validate_config(config)
         
         # Store in RuntimeConfig for global access

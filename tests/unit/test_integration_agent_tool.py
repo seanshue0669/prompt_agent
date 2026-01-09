@@ -44,8 +44,11 @@ def test_integrate_answers_success():
     # Verify LLM was called correctly
     assert mock_client.invoke.call_count == 1
     call_args = mock_client.invoke.call_args
-    assert "Help students with homework" in call_args.kwargs["user_prompt"]
-    assert "1. University level students" in call_args.kwargs["user_prompt"]
+    user_prompt = call_args.kwargs["user_prompt"]
+    assert "Help students with homework" in user_prompt
+    assert "Answer list (JSON):" in user_prompt
+    assert '"question"' in user_prompt
+    assert '"answer": "University level students"' in user_prompt
     assert call_args.kwargs["system_prompt"] == system_prompt
     assert call_args.kwargs["config_override"]["response_format"]["type"] == "json_object"
 

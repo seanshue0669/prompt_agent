@@ -10,11 +10,11 @@ from agentcore import test_wrapper
 from agents.orchestrator import Orchestrator
 from config.runtime_config import RuntimeConfig
 
-CONFIG_PATH = Path("config/system_test_config.json")
+CONFIG_PATH = Path("config/json_config/system_test_config.json")
 
 
 def load_system_test_config():
-    """Load system test config from config/system_test_config.json."""
+    """Load system test config from config/json_config/system_test_config.json."""
     with CONFIG_PATH.open("r", encoding="utf-8") as handle:
         return json.load(handle)
 

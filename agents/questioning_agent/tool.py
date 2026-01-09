@@ -1,5 +1,6 @@
 # agents/questioning_agent/tool.py
 import json
+import re
 from typing import List, Dict
 from agentcore import LLMClient, BaseTool, auto_wrap_error
 from config.runtime_config import RuntimeConfig
@@ -19,6 +20,42 @@ class QuestioningAgentTool(BaseTool):
     def __init__(self, client: LLMClient):
         super().__init__()
         self.client = client
+
+    @staticmethod
+    def _sanitize_text(text: str) -> str:
+        return "".join(ch for ch in text if not (0xD800 <= ord(ch) <= 0xDFFF))
+
+    @staticmethod
+    def _expand_option_answer(answer: str, options: List[str] | None) -> str:
+        if not answer or not options:
+            return answer
+
+        raw = answer.strip()
+        if not raw:
+            return answer
+
+        if not re.fullmatch(r"[A-Za-z](?:\s*[,，/、\s]+\s*[A-Za-z])*$", raw):
+            return answer
+
+        option_map = {}
+        for opt in options:
+            match = re.match(r"\s*([A-Za-z])\s*[\)\）]\s*(.*)", opt)
+            if match:
+                option_map[match.group(1).upper()] = match.group(2).strip()
+
+        codes = [c.upper() for c in re.findall(r"[A-Za-z]", raw)]
+        selected = []
+        seen = set()
+        for code in codes:
+            text = option_map.get(code)
+            if text and text not in seen:
+                seen.add(text)
+                selected.append(text)
+
+        if not selected:
+            return answer
+
+        return f"{raw}（{'、'.join(selected)}）"
     
     @auto_wrap_error
     def handle_question_conversation(
@@ -54,7 +91,11 @@ class QuestioningAgentTool(BaseTool):
         """
         # Track entire conversation
         conversation_history = []
-        
+
+        cli = RuntimeConfig.cli_interface
+        if cli is not None:
+            cli.clear_conversation()
+
         # Ask original question (open-ended, no options)
         answer = self._ask_question_via_cli(
             question=question,
@@ -66,23 +107,21 @@ class QuestioningAgentTool(BaseTool):
         
         conversation_history.append({
             "question": question,
-            "answer": answer
+            "answer": answer,
+            "options": None
         })
 
-        cli = RuntimeConfig.cli_interface
         if cli is not None:
             cli.show_waiting_message()
         
         # Followup loop
         followup_count = 0
-        current_answer = answer
-        
         while followup_count < max_followup:
             # Ask LLM if followup is needed
             followup_result = self._check_followup_needed(
                 system_prompt=system_prompt_followup,
                 original_question=question,
-                current_answer=current_answer,
+                conversation_history=conversation_history,
                 followup_count=followup_count,
                 max_followup=max_followup
             )
@@ -101,17 +140,23 @@ class QuestioningAgentTool(BaseTool):
                 total_questions=total_questions,
                 options=followup_options  # Pass options to CLI
             )
-            
+            followup_answer = self._expand_option_answer(
+                followup_answer,
+                followup_options
+            )
+
             conversation_history.append({
                 "question": followup_question,
                 "answer": followup_answer,
-                "has_options": followup_options is not None
+                "options": followup_options
             })
             
             followup_count += 1
-            current_answer = followup_answer
         
         # Compress entire conversation
+        if cli is not None:
+            cli.show_waiting_message("正在節錄摘要並進行道下一個部分")
+
         compressed = self._compress_conversation(
             system_prompt=system_prompt_compress,
             original_question=question,
@@ -165,7 +210,7 @@ class QuestioningAgentTool(BaseTool):
         self,
         system_prompt: str,
         original_question: str,
-        current_answer: str,
+        conversation_history: List[Dict[str, str]],
         followup_count: int,
         max_followup: int
     ) -> Dict[str, any]:
@@ -175,7 +220,7 @@ class QuestioningAgentTool(BaseTool):
         Args:
             system_prompt: System prompt for followup criteria
             original_question: The original question asked
-            current_answer: User's current answer
+            conversation_history: List of {"question": str, "answer": str, "options": List[str] | None} dicts
             followup_count: Current followup count
             max_followup: Maximum allowed followup count
             
@@ -194,14 +239,25 @@ class QuestioningAgentTool(BaseTool):
             }
         
         # Construct user prompt for LLM to decide
-        user_prompt = f"""Original question: {original_question}
+        formatted_history = f"Original question: {original_question}\n\n"
+        for i, turn in enumerate(conversation_history, 1):
+            formatted_history += f"Turn {i}:\n"
+            formatted_history += f"Question: {turn['question']}\n"
+            if turn.get("options"):
+                formatted_history += "Options:\n"
+                for opt in turn["options"]:
+                    formatted_history += f"  {opt}\n"
+            formatted_history += f"User's answer: {turn['answer']}\n\n"
 
-User's answer: {current_answer}
+        user_prompt = f"""<user_prompt>
+        {formatted_history}Current followup count: {followup_count}
+        Maximum followup allowed: {max_followup}
 
-Current followup count: {followup_count}
-Maximum followup allowed: {max_followup}
+        Based on the complete conversation history and the followup criteria in the system prompt, determine if another followup question is needed.
+        </user__prompt>"""
 
-Based on the followup criteria in the system prompt, determine if this answer is clear enough or if a followup question is needed."""
+        user_prompt = self._sanitize_text(user_prompt)
+        system_prompt = self._sanitize_text(system_prompt)
         
         # Configure for JSON output with strict schema
         config_override = {
@@ -232,7 +288,8 @@ Based on the followup criteria in the system prompt, determine if this answer is
                     }
                 }
             },
-            
+            "max_completion_tokens": 100000,
+            "temperature": 0.7,
         }
         
         # Call LLM
@@ -315,7 +372,7 @@ Based on the followup criteria in the system prompt, determine if this answer is
         Args:
             system_prompt: System prompt for compression (with CoT)
             original_question: The original question asked
-            conversation_history: List of {"question": str, "answer": str, "has_options": bool} dicts
+            conversation_history: List of {"question": str, "answer": str, "options": List[str] | None} dicts
             
         Returns:
             Compressed Q&A string like "Q: ... A: ..."
@@ -327,21 +384,28 @@ Based on the followup criteria in the system prompt, determine if this answer is
         formatted_history = ""
         for i, turn in enumerate(conversation_history, 1):
             formatted_history += f"{i}. Q: {turn['question']}\n"
+            if turn.get("options"):
+                formatted_history += f"   選項：{', '.join(turn['options'])}\n"
             formatted_history += f"   A: {turn['answer']}\n\n"
         
         # Construct user prompt
-        user_prompt = f"""Original question: {original_question}
+        user_prompt = f"""<user_prompt>
+Original question: {original_question}
 
         Conversation history:
         {formatted_history}
 
-        Based on the entire conversation, compress this into a single concise Q&A pair."""
+        Based on the entire conversation, compress this into a single concise Q&A pair.
+</user__prompt>"""
+
+        user_prompt = self._sanitize_text(user_prompt)
+        system_prompt = self._sanitize_text(system_prompt)
                 
         # Configure for JSON output with CoT
         config_override = {
             "response_format": {"type": "json_object"},
             "reasoning_effort": "high",
-            "max_completion_tokens": 1000  # More tokens for CoT
+            "max_completion_tokens": 10000  # More tokens for CoT
         }
         
         # Call LLM

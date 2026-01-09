@@ -1,3 +1,4 @@
+# cli/cli_interface.py
 import os
 from typing import Optional, List
 
@@ -211,6 +212,9 @@ class CLIInterface:
                 break
         
         user_input = "\n".join(lines)
+        user_input = "".join(
+            ch for ch in user_input if not (0xD800 <= ord(ch) <= 0xDFFF)
+        )
         
         # Show user's message in the conversation
         self.show_message("user", user_input)

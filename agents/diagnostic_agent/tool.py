@@ -11,6 +11,10 @@ class DiagnosticAgentTool(BaseTool):
     def __init__(self, client: LLMClient):
         super().__init__()
         self.client = client
+
+    @staticmethod
+    def _sanitize_text(text: str) -> str:
+        return "".join(ch for ch in text if not (0xD800 <= ord(ch) <= 0xDFFF))
     
     @auto_wrap_error
     def diagnose_prompt(self, system_prompt: str, current_prompt: str) -> list[str]:
@@ -28,11 +32,16 @@ class DiagnosticAgentTool(BaseTool):
             Exception: If LLM call fails or returns invalid JSON
         """
         # Construct user prompt with the current prompt to analyze
-        user_prompt = f"""Please analyze the following prompt:
+        user_prompt = f"""<user_prompt>
+        Please analyze the following prompt:
         ```
         {current_prompt}
         ```
-        Based on the diagnostic criteria in the system prompt, generate questions to ask the user."""
+        Based on the diagnostic criteria in the system prompt, generate questions to ask the user.
+        </user__prompt>"""
+
+        user_prompt = self._sanitize_text(user_prompt)
+        system_prompt = self._sanitize_text(system_prompt)
         
         # Configure for JSON output
         config_override = {
@@ -54,7 +63,9 @@ class DiagnosticAgentTool(BaseTool):
                     }
                 }
             },
-            "reasoning_effort": "high"
+            "reasoning_effort": "high",
+            "max_completion_tokens": 100000,
+            "temperature": 0.6
         }
         
         # Call LLM

@@ -2,6 +2,7 @@
 from agentcore import LLMClient, BaseGraph
 from agents.orchestrator.schema import OrchestratorSchema
 from agents.orchestrator.tool import OrchestratorTool
+from config.runtime_config import RuntimeConfig
 from langgraph.graph import END
 
 # Import dependent agents
@@ -113,6 +114,11 @@ class Orchestrator(BaseGraph):
         Call DiagnosticAgent to generate questions for current stage.
         """
         stage_idx = state["stage_idx"]
+
+        cli = RuntimeConfig.cli_interface
+        if cli is not None:
+            cli.update_stage(stage_idx=stage_idx, substage="診斷")
+            cli.show_waiting_message("正在分析本階段問題...")
         
         # Inject diagnostic system prompt into state for subgraph
         state["system_prompt"] = self.tool.get_system_prompt(stage_idx, "diagnostic")
@@ -161,6 +167,11 @@ class Orchestrator(BaseGraph):
         Call IntegrationAgent to integrate answers into prompt.
         """
         stage_idx = state["stage_idx"]
+
+        cli = RuntimeConfig.cli_interface
+        if cli is not None:
+            cli.update_stage(stage_idx=stage_idx, substage="統合")
+            cli.show_waiting_message("正在進行最終統合...")
         
         # Inject integration system prompt into state for subgraph
         state["system_prompt"] = self.tool.get_system_prompt(stage_idx, "integration")

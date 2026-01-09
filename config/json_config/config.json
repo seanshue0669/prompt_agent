@@ -1,12 +1,12 @@
 {
-  "max_followup_count": 6,
+  "max_followup_count": 20,
   "stage_names": [
     "execution_strategy_skeleton",
     "input_output_skeleton",
     "execution_strategy_disambiguation",
     "input_output_disambiguation",
-    "input_output_robustness",
-    "execution_strategy_robustness"
+    "execution_strategy_robustness",
+    "input_output_robustness"
   ],
   "stage_prompts": {
     "execution_strategy_skeleton": {
